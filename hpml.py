@@ -2289,12 +2289,13 @@ def run_pruning_exp():
 
         if p > 0:
             for module_name, module in diff.named_modules():
-                if 'unet' in module_name and isinstance(module, nn.Conv2d):
-                    # If the module is a convolutional layer, prune its weight tensor
+                if 'unet' in module_name and (isinstance(module, nn.Conv2d) or isinstance(module, nn.Linear)):
+                    # If the module is a convolutional or linear layer, prune it
                     prune.l1_unstructured(module, name='weight', amount=p)
                     prune.remove(module, 'weight')
-                    prune.l1_unstructured(module, name='bias', amount=p)
-                    prune.remove(module, 'bias')
+                    if module.bias is not None:
+                        prune.l1_unstructured(module, name='bias', amount=p)
+                        prune.remove(module, 'bias')
             print('Model Pruned!')
 
         params, pp = percentage_pruned(diff)
@@ -2328,7 +2329,7 @@ def run_pruning_exp():
             clip_score_val = clip_score_fn(torch.from_numpy(images_int).permute(2, 0, 1), prompt).detach()
             clip_score_val = round(float(clip_score_val), 4)
 
-            experiment_type = 'Baseline Model, no pruning' if p == 0 else f'UNet\'s Convolutional Layers Pruned - {p*100}%'
+            experiment_type = 'Baseline Model, no pruning' if p == 0 else f'UNet Pruned - {p*100}%'
 
             table.add_data(experiment_type,
                            prompt,
@@ -2337,7 +2338,7 @@ def run_pruning_exp():
                            clip_score_val,
                            wandb.Image(output_img))
 
-    wandb.log({"Pruning Experiments": table})
+    wandb.log({"Pruning Convolutional and Linear Layers of UNet": table})
 
     return
 
