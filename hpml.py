@@ -18,6 +18,7 @@ from transformers import CLIPTokenizer
 import math
 import wandb
 import os
+import torch.nn.utils.prune as prune
 # from decoder import VAE_AttentionBlock, VAE_ResidualBlock
 
 
@@ -2226,12 +2227,110 @@ class VAE_Encoder(nn.Sequential):
 # !mkdir data/weights
 # !wget  https://huggingface.co/runwayml/stable-diffusion-v1-5/resolve/main/tokenizer/vocab.json -O ./data/tokenizer_vocab.json
 # !wget  https://huggingface.co/runwayml/stable-diffusion-v1-5/resolve/main/tokenizer/merges.txt -O ./data/tokenizer_merges.txt
-# !wget  https://huggingface.co/runwayml/stable-diffusion-v1-5/tree/main -O ./data/weights/model_chkpoint
 # !wget https://huggingface.co/runwayml/stable-diffusion-v1-5/resolve/main/v1-5-pruned-emaonly.ckpt -O ./data/weights/v1-5-pruned-emaonly.ckpt
 
 # !pip install pytorch-lightning
 
-if __name__ =='__main__':
+
+def percentage_pruned(model):
+    total_zeros = 0
+    total_params = 0
+    for name, param in model.named_parameters():
+        total_zeros += torch.sum(param == 0).item()
+        total_params += param.numel()
+
+    return (total_zeros / total_params) * 100
+
+
+def run_pruning_exp():
+    clip = CLIP()
+    encoder = VAE_Encoder()
+    decoder = VAE_Decoder()
+
+    state_dict = load_from_standard_weights('./data/weights/v1-5-pruned-emaonly.ckpt')
+
+    clip.load_state_dict(state_dict['clip'], strict=True)
+    encoder.load_state_dict(state_dict['encoder'], strict=True)
+    decoder.load_state_dict(state_dict['decoder'], strict=True)
+
+    tokenizer = CLIPTokenizer("./data/tokenizer_vocab.json", merges_file="./data/tokenizer_merges.txt")
+
+    prompt = "A cat stretching on the floor, highly detailed, ultra sharp, cinematic, 100mm lens, 8k resolution."
+    uncond_prompt = ""  # Also known as negative prompt
+    do_cfg = True
+    cfg_scale = 8
+    strength = 0.9
+    num_inference_steps = 40
+    seed = 42
+    sampler = 'ddpm'
+
+    device = 'cuda' if torch.cuda.is_available() else 'cpu'
+
+    pruning_levels = [0, 0.05, 0.1, 0.15, 0.2, 0.25, 0.3]
+
+    table = wandb.Table(columns=["Experiment Description", "Prompt", "Zero-valued Parameters in Diffusion unit (%)", "Image"])
+
+    for p in pruning_levels:
+        diff = Diffusion()
+        diff.load_state_dict(state_dict['diffusion'], strict=True)
+
+        # for layer_name, param in diff.named_parameters():
+            # if 'conv' in layer_name:
+            #     layer_type = layer_name.split('.')[0]
+            #     prune.l1_unstructured(diff[layer_name], name=layer_type, amount=p)
+        # unet.encoders.1.1.conv_input.weight
+        # prune.l1_unstructured(diff.unet.encoders[1][1].conv_input, name='weight', amount=p)
+        # param_tensor = getattr(diff, 'unet.encoders.1.1.conv_input')
+        # print(param_tensor)
+        # prune.l1_unstructured(param_tensor, name='weight', amount=p)
+        if p > 0:
+            for module_name, module in diff.named_modules():
+                if 'unet' in module_name and isinstance(module, nn.Conv2d):
+                    # If the module is a convolutional layer, prune its weight tensor
+                    prune.l1_unstructured(module, name='weight', amount=p)
+                    prune.remove(module, 'weight')
+                    prune.l1_unstructured(module, name='bias', amount=p)
+                    prune.remove(module, 'bias')
+            print('Model Pruned!')
+
+        pp = percentage_pruned(diff)
+
+        models = {
+            "clip": clip,
+            "encoder": encoder,
+            "decoder": decoder,
+            "diffusion": diff,
+        }
+
+        output_img = generate(
+            prompt=prompt,
+            uncond_prompt=uncond_prompt,
+            input_image=None,
+            strength=strength,
+            do_cfg=do_cfg,
+            cfg_scale=cfg_scale,
+            sampler_name=sampler,
+            n_inference_steps=num_inference_steps,
+            seed=seed,
+            models=models,
+            device=device,
+            idle_device="cpu",
+            tokenizer=tokenizer,
+        )
+
+        experiment_type = 'Baseline Model, no pruning' if p == 0 else f'UNet\'s Convolutional Layers Pruned - {p*100}%'
+
+        table.add_data(experiment_type,
+                       prompt,
+                       pp,
+                       wandb.Image(output_img))
+
+    wandb.log({"Pruning Experiments": table})
+
+    return
+
+
+if __name__ == '__main__':
     """# Model Loading and demo"""
 
     os.environ["WANDB_API_KEY"] = "918907cbd509a54b20e48c35485f867aab3e59df"
@@ -2243,63 +2342,6 @@ if __name__ =='__main__':
         entity="hpmlcolumbia"
     )
 
-    clip = CLIP()
-    encoder = VAE_Encoder()
-    decoder = VAE_Decoder()
-    diff = Diffusion()
-
-    state_dict = load_from_standard_weights('./data/weights/v1-5-pruned-emaonly.ckpt')
-
-    clip.load_state_dict(state_dict['clip'], strict=True)
-    encoder.load_state_dict(state_dict['encoder'], strict=True)
-    decoder.load_state_dict(state_dict['decoder'], strict=True)
-    diff.load_state_dict(state_dict['diffusion'], strict=True)
-
-    tokenizer = CLIPTokenizer("./data/tokenizer_vocab.json", merges_file="./data/tokenizer_merges.txt")
-
-    prompt = "A cat stretching on the floor, highly detailed, ultra sharp, cinematic, 100mm lens, 8k resolution."
-    uncond_prompt = ""  # Also known as negative prompt
-    do_cfg = True
-    cfg_scale = 8
-    strength = 0.9
-    num_inference_steps = 40
-    seed = 42
-
-    models = {
-        "clip": clip,
-        "encoder": encoder,
-        "decoder": decoder,
-        "diffusion": diff,
-    }
-    sampler = 'ddpm'
-
-    output_img = generate(
-        prompt=prompt,
-        uncond_prompt=uncond_prompt,
-        input_image=None,
-        strength=strength,
-        do_cfg=do_cfg,
-        cfg_scale=cfg_scale,
-        sampler_name=sampler,
-        n_inference_steps=num_inference_steps,
-        seed=seed,
-        models=models,
-        device=None,
-        idle_device="cpu",
-        tokenizer=tokenizer,
-    )
-
-    # prompt: display output_img of range (0, 255) numpy array
-
-    # Convert the output_img to a numpy array
-    # output_img_np = output_img
-
-    # Save the output_img in WandB
-    table = wandb.Table(columns=["Prompt", "Model Type", "Image"])
-    table.add_data("A cat stretching on the floor, highly detailed, ultra sharp, cinematic, 100mm lens, 8k resolution.",
-                   "Baseline, No Pruning",
-                   wandb.Image(output_img))
-    wandb.log({"Experiment 1": table})
+    run_pruning_exp()
 
     wandb.finish()
-
