@@ -19,6 +19,9 @@ import math
 import wandb
 import os
 import torch.nn.utils.prune as prune
+from torchmetrics.functional.multimodal import clip_score
+from functools import partial
+
 # from decoder import VAE_AttentionBlock, VAE_ResidualBlock
 
 
@@ -2239,7 +2242,7 @@ def percentage_pruned(model):
         total_zeros += torch.sum(param == 0).item()
         total_params += param.numel()
 
-    return (total_zeros / total_params) * 100
+    return total_params - total_zeros, (total_zeros / total_params) * 100
 
 
 def run_pruning_exp():
@@ -2255,7 +2258,7 @@ def run_pruning_exp():
 
     tokenizer = CLIPTokenizer("./data/tokenizer_vocab.json", merges_file="./data/tokenizer_merges.txt")
 
-    prompt = "A cat stretching on the floor, highly detailed, ultra sharp, cinematic, 100mm lens, 8k resolution."
+    # prompt = "A cat stretching on the floor, highly detailed, ultra sharp, cinematic, 100mm lens, 8k resolution."
     uncond_prompt = ""  # Also known as negative prompt
     do_cfg = True
     cfg_scale = 8
@@ -2263,26 +2266,27 @@ def run_pruning_exp():
     num_inference_steps = 40
     seed = 42
     sampler = 'ddpm'
+    clip_score_fn = partial(clip_score, model_name_or_path="openai/clip-vit-base-patch16")
 
     device = 'cuda' if torch.cuda.is_available() else 'cpu'
 
-    pruning_levels = [0, 0.05, 0.1, 0.15, 0.2, 0.25, 0.3]
+    pruning_levels = [i/100 for i in range(0, 96, 5)]
 
-    table = wandb.Table(columns=["Experiment Description", "Prompt", "Zero-valued Parameters in Diffusion unit (%)", "Image"])
+    prompts = [
+        "a photo of an astronaut riding a horse on mars",
+        "A high tech solarpunk utopia in the Amazon rainforest",
+        "A pikachu fine dining with a view to the Eiffel Tower",
+        "A mecha robot in a favela in expressionist style",
+        "an insect robot preparing a delicious meal",
+        "A small cabin on top of a snowy mountain in the style of Disney, artstation",
+    ]
+
+    table = wandb.Table(columns=["Experiment Description", "Prompt", "Non-Zero Parameters in Diffusion Unit", "Zero-valued Parameters in Diffusion unit (%)", "CLIP Score", "Image"])
 
     for p in pruning_levels:
         diff = Diffusion()
         diff.load_state_dict(state_dict['diffusion'], strict=True)
 
-        # for layer_name, param in diff.named_parameters():
-            # if 'conv' in layer_name:
-            #     layer_type = layer_name.split('.')[0]
-            #     prune.l1_unstructured(diff[layer_name], name=layer_type, amount=p)
-        # unet.encoders.1.1.conv_input.weight
-        # prune.l1_unstructured(diff.unet.encoders[1][1].conv_input, name='weight', amount=p)
-        # param_tensor = getattr(diff, 'unet.encoders.1.1.conv_input')
-        # print(param_tensor)
-        # prune.l1_unstructured(param_tensor, name='weight', amount=p)
         if p > 0:
             for module_name, module in diff.named_modules():
                 if 'unet' in module_name and isinstance(module, nn.Conv2d):
@@ -2293,7 +2297,7 @@ def run_pruning_exp():
                     prune.remove(module, 'bias')
             print('Model Pruned!')
 
-        pp = percentage_pruned(diff)
+        params, pp = percentage_pruned(diff)
 
         models = {
             "clip": clip,
@@ -2302,28 +2306,36 @@ def run_pruning_exp():
             "diffusion": diff,
         }
 
-        output_img = generate(
-            prompt=prompt,
-            uncond_prompt=uncond_prompt,
-            input_image=None,
-            strength=strength,
-            do_cfg=do_cfg,
-            cfg_scale=cfg_scale,
-            sampler_name=sampler,
-            n_inference_steps=num_inference_steps,
-            seed=seed,
-            models=models,
-            device=device,
-            idle_device="cpu",
-            tokenizer=tokenizer,
-        )
+        for prompt in prompts:
 
-        experiment_type = 'Baseline Model, no pruning' if p == 0 else f'UNet\'s Convolutional Layers Pruned - {p*100}%'
+            output_img = generate(
+                prompt=prompt,
+                uncond_prompt=uncond_prompt,
+                input_image=None,
+                strength=strength,
+                do_cfg=do_cfg,
+                cfg_scale=cfg_scale,
+                sampler_name=sampler,
+                n_inference_steps=num_inference_steps,
+                seed=seed,
+                models=models,
+                device=device,
+                idle_device="cpu",
+                tokenizer=tokenizer,
+            )
 
-        table.add_data(experiment_type,
-                       prompt,
-                       pp,
-                       wandb.Image(output_img))
+            images_int = (output_img * 255).astype("uint8")
+            clip_score_val = clip_score_fn(torch.from_numpy(images_int).permute(2, 0, 1), prompt).detach()
+            clip_score_val = round(float(clip_score_val), 4)
+
+            experiment_type = 'Baseline Model, no pruning' if p == 0 else f'UNet\'s Convolutional Layers Pruned - {p*100}%'
+
+            table.add_data(experiment_type,
+                           prompt,
+                           params,
+                           pp,
+                           clip_score_val,
+                           wandb.Image(output_img))
 
     wandb.log({"Pruning Experiments": table})
 
