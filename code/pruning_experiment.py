@@ -146,7 +146,7 @@ def run_pruning_exp():
 
         fake_images = torch.stack(fake_images, dim=0)
         fid = FrechetInceptionDistance(normalize=True)
-        fid.update(real_images[0:1], real=True)
+        fid.update(real_images, real=True)
         fid.update(fake_images, real=False)
 
         clip_score_net = clip_score_fn(output_images, prompts).detach()
