@@ -5,14 +5,11 @@ from transformers import CLIPTokenizer
 import torch.nn.utils.prune as prune
 from torchmetrics.functional.multimodal import clip_score
 from functools import partial
+from torchmetrics.image.fid import FrechetInceptionDistance
 
-from .stable_diffusion.model_loader import load_from_standard_weights
-# from clip_unit import CLIP
-# from vae_unit import VAE_Encoder, VAE_Decoder
-# from diffusion import Diffusion
-# from pipeline import generate
-from .stable_diffusion import *
-from utility import percentage_pruned
+from stable_diffusion.model_loader import load_from_standard_weights
+from stable_diffusion import *
+from utility import percentage_pruned, get_real_images
 
 
 def run_pruning_exp():
@@ -51,11 +48,29 @@ def run_pruning_exp():
         "A small cabin on top of a snowy mountain in the style of Disney, artstation",
     ]
 
+    prompts_fid = [
+        "cassette player",
+        "chainsaw",
+        "chainsaw",
+        "church",
+        "gas pump",
+        "gas pump",
+        "gas pump",
+        "parachute",
+        "parachute",
+        "tench",
+    ]
+    real_images = get_real_images()
+
     table = wandb.Table(columns=["Experiment Description", "Prompt", "Non-Zero Parameters in Diffusion Unit", "Zero-valued Parameters in Diffusion unit (%)", "CLIP Score", "Image"])
+    table2 = wandb.Table(columns=["Experiment Description", "Non-Zero Parameters in Diffusion Unit",
+                                  "Zero-valued Parameters in Diffusion unit (%)", "CLIP Score", "FID Score"])
 
     for p in pruning_levels:
         diff = Diffusion()
         diff.load_state_dict(state_dict['diffusion'], strict=True)
+        output_images = []
+        fake_images = []
 
         if p > 0:
             for module_name, module in diff.named_modules():
@@ -77,6 +92,8 @@ def run_pruning_exp():
             "diffusion": diff,
         }
 
+        experiment_type = 'Baseline Model, no pruning' if p == 0 else f'UNet Pruned - {p * 100}%'
+
         for prompt in prompts:
 
             output_img = generate(
@@ -96,10 +113,9 @@ def run_pruning_exp():
             )
 
             images_int = (output_img * 255).astype("uint8")
+            output_images.append(torch.from_numpy(images_int).permute(2, 0, 1))
             clip_score_val = clip_score_fn(torch.from_numpy(images_int).permute(2, 0, 1), prompt).detach()
             clip_score_val = round(float(clip_score_val), 4)
-
-            experiment_type = 'Baseline Model, no pruning' if p == 0 else f'UNet Pruned - {p*100}%'
 
             table.add_data(experiment_type,
                            prompt,
@@ -108,7 +124,38 @@ def run_pruning_exp():
                            clip_score_val,
                            wandb.Image(output_img))
 
-    wandb.log({"Pruning Convolutional and Linear Layers of UNet": table})
+        for prompt in prompts_fid:
+            output_img = generate(
+                prompt=prompt,
+                uncond_prompt=uncond_prompt,
+                input_image=None,
+                strength=strength,
+                do_cfg=do_cfg,
+                cfg_scale=cfg_scale,
+                sampler_name=sampler,
+                n_inference_steps=num_inference_steps,
+                seed=seed,
+                models=models,
+                device=device,
+                idle_device="cpu",
+                tokenizer=tokenizer,
+            )
+
+            images_int = (output_img * 255).astype("uint8")
+            fake_images.append(torch.from_numpy(images_int).permute(2, 0, 1))
+
+        fake_images = torch.stack(fake_images, dim=0)
+        fid = FrechetInceptionDistance(normalize=True)
+        fid.update(real_images[0:1], real=True)
+        fid.update(fake_images, real=False)
+
+        clip_score_net = clip_score_fn(output_images, prompts).detach()
+        clip_score_net = round(float(clip_score_net), 4)
+
+        table2.add_data(experiment_type, params, pp, clip_score_net, round(float(fid.compute()), 4))
+
+    wandb.log({"Results for Pruning Convolutional and Linear Layers of UNet": table})
+    wandb.log({"CLIP Score and FID for Pruning Convolutional and Linear Layers of UNet": table2})
 
     return
 
