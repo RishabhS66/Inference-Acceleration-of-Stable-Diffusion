@@ -65,7 +65,8 @@ def generate(
         if do_cfg:
             # Convert into a list of length Seq_Len=77
             cond_tokens = tokenizer.batch_encode_plus(
-                [prompt], padding="max_length", max_length=77
+                [prompt], padding="max_length", max_length=77,
+                truncation = True,
             ).input_ids
             # (Batch_Size, Seq_Len)
             cond_tokens = torch.tensor(cond_tokens, dtype=torch.long, device=device)
