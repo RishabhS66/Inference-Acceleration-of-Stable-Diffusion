@@ -73,7 +73,8 @@ def generate(
             cond_context = clip(cond_tokens)
             # Convert into a list of length Seq_Len=77
             uncond_tokens = tokenizer.batch_encode_plus(
-                [uncond_prompt], padding="max_length", max_length=77
+                [uncond_prompt], padding="max_length", max_length=77,
+                truncation = True,
             ).input_ids
             # (Batch_Size, Seq_Len)
             uncond_tokens = torch.tensor(uncond_tokens, dtype=torch.long, device=device)
@@ -84,7 +85,8 @@ def generate(
         else:
             # Convert into a list of length Seq_Len=77
             tokens = tokenizer.batch_encode_plus(
-                [prompt], padding="max_length", max_length=77
+                [prompt], padding="max_length", max_length=77, 
+                truncation = True,
             ).input_ids
             # (Batch_Size, Seq_Len)
             tokens = torch.tensor(tokens, dtype=torch.long, device=device)
