@@ -1,5 +1,5 @@
 import torch
-from attentions import *
+from .attentions import *
 
 
 class CLIPEmbedding(nn.Module):

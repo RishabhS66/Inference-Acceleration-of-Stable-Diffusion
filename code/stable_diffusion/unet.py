@@ -1,6 +1,38 @@
-from attentions import *
-from utility import *
+import torch
+from .attentions import *
 
+class TimeEmbedding(nn.Module):
+    def __init__(self, n_embd):
+        super().__init__()
+        self.linear_1 = nn.Linear(n_embd, 4 * n_embd)
+        self.linear_2 = nn.Linear(4 * n_embd, 4 * n_embd)
+
+    def forward(self, x):
+        # x: (1, 320)
+
+        # (1, 320) -> (1, 1280)
+        x = self.linear_1(x)
+
+        # (1, 1280) -> (1, 1280)
+        x = F.silu(x)
+
+        # (1, 1280) -> (1, 1280)
+        x = self.linear_2(x)
+
+        return x
+
+
+class Upsample(nn.Module):
+    def __init__(self, channels):
+        super().__init__()
+        self.conv = nn.Conv2d(channels, channels, kernel_size=3, padding=1)
+
+    def forward(self, x):
+        # (Batch_Size, Features, Height, Width) -> (Batch_Size, Features, Height * 2, Width * 2)
+        x = F.interpolate(x, scale_factor=2, mode='nearest')
+        return self.conv(x)
+    
+    
 class SwitchSequential(nn.Sequential):
     def forward(self, x, context, time):
         for layer in self:

@@ -1,6 +1,5 @@
 from torch import nn
-from unet import UNET, UNET_OutputLayer
-from utility import TimeEmbedding
+from .unet import UNET, UNET_OutputLayer, TimeEmbedding
 
 class Diffusion(nn.Module):
     def __init__(self):

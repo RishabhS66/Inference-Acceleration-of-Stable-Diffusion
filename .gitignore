@@ -1,1 +1,4 @@
 **/.DS_Store
+v1-5-pruned-emaonly.ckpt
+.ipynb_checkpoints
+__pycache__

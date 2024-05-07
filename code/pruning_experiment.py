@@ -6,11 +6,12 @@ import torch.nn.utils.prune as prune
 from torchmetrics.functional.multimodal import clip_score
 from functools import partial
 
-from model_loader import load_from_standard_weights
-from clip_unit import CLIP
-from vae_unit import VAE_Encoder, VAE_Decoder
-from diffusion import Diffusion
-from generate_image import generate
+from .stable_diffusion.model_loader import load_from_standard_weights
+# from clip_unit import CLIP
+# from vae_unit import VAE_Encoder, VAE_Decoder
+# from diffusion import Diffusion
+# from pipeline import generate
+from .stable_diffusion import *
 from utility import percentage_pruned
 
 
