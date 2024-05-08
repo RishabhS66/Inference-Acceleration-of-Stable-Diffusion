@@ -70,7 +70,7 @@ class UniformSymmetricQuantiser(nn.Module):
         self.x_absmax = self.x_absmax * act_range_momentum + x_max * (1 - act_range_momentum)
     delta = self.x_absmax / (self.n_levels - 1)
     delta = torch.clamp(delta, min=1e-8)
-    self.delta = torch.tensor(delta).type_as(x)
+    self.delta = delta.type_as(x)
 
   def init_quantization_scale(self, x: torch.Tensor, channel_wise = False):
     delta = None

@@ -5,6 +5,7 @@ from .quant_wrappers import QuantWrapper, TimeStepCalibratedQuantWrapper
 import sys
 sys.path.insert(0, '../../')
 from stable_diffusion.pipeline import generate
+import wandb
 
 class Calibrator:
   def __init__(self, models, tokeniser, 
@@ -40,7 +41,7 @@ class Calibrator:
     sampler = config['GENERATION_PARAMS']['SAMPLER_NAME']
 
     for prompt in prompts:
-      generate(
+      img = generate(
           prompt=prompt,
           uncond_prompt=uncond_prompt,
           input_image=None,
@@ -55,6 +56,13 @@ class Calibrator:
           idle_device="cpu",
           tokenizer=self.tokenizer,
       )
+      if "LOG_TO_WANDB" in config and config["LOG_TO_WANDB"]:
+        print("-- logging to wandb --")
+        wandb.log({
+          'calibration_prompt': prompt,
+          'calibrated_image': wandb.Image(img)
+        })
+
       gc.collect()
       torch.cuda.empty_cache()
 
