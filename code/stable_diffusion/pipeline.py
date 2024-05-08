@@ -141,6 +141,9 @@ def generate(
 
         timesteps = tqdm(sampler.timesteps)
         for i, timestep in enumerate(timesteps):
+            if hasattr(diffusion, 'set_current_timestep'):
+                diffusion.set_current_timestep(i)
+                       
             # (1, 320)
             time_embedding = get_time_embedding(timestep).to(device)
 
