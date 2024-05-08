@@ -120,7 +120,7 @@ Following were the interesting takeaways:
 
 - Our proposed approach, Time step aware quantization improves the performance significantly over vanilla quantization techniques.
 
-More details are available at the wandb page. Following are some representative images:
+More details are available at the wandb page ([here](https://wandb.ai/hpmlcolumbia/quantization_pruning/reports/Quantization-of-Stable-Diffusion-Model--Vmlldzo3ODYwNjE0?accessToken=l1s8rybi2te5hevvzi5knmhpuqm1hszibg7ouamr7v3qyx0ysyaufsrnwvblbvkk)). Following are some representative images:
 
 <figure>
     <figcaption><b>Image by Base Diffusion Model</b></figcaption>
