@@ -47,34 +47,36 @@ mkdir data/weights
 wget https://huggingface.co/runwayml/stable-diffusion-v1-5/resolve/main/v1-5-pruned-emaonly.ckpt -O ./data/weights/v1-5-pruned-emaonly.ckpt
 ```
 
-To run the experiments, pruning experiments execute the command below:
+To run the quantization experiments, execute the command below:
+```bash
+python quant_experiment_script.py config.yaml
+```
+
+To run the pruning experiments, execute the command below:
 ```bash
 python main.py
 ```
 
-To run the quantisation experiments, execute the command below:
-```bash
-python quant_experiment_script.py config.yaml
-```
-## Quantisation Description
-The quantisation module simulates quantisation based on parameters specified by the config.yaml.
-We implement different strategies for quantisation, which can be accessed via different parameters.
 
-The ufile `uniform_symmetric_quantiser.py` has the quantiser which can quantise inputs to a symmetric range as per the specified `n_bits`.
+### Quantization Description
+The quantization module simulates quantization based on parameters specified by the `config.yaml`.
+We implement different strategies for quantization, which can be accessed via different parameters.
 
-The quantisation module implements two models that serve as wrappers for base diffusion model. They are:
+The file `uniform_symmetric_quantiser.py` has the quantizer which can quantize inputs to a symmetric range as per the specified `n_bits`.
 
-- QuantModel: Supports n-bits symmetric quantisation with possible scale strategies of `mse` and `max`
-- TimeStepCalibratedQuantModel: Implements time-step aware quantisation for activations, supports possible scale strategies of `mse` and `max`. Parametrised by number of timesteps and k, a constant denoting the number o fintervals in the timesteps.
+The quantisation module implements two models that serve as wrappers for a base diffusion model. They are:
+
+- <u>QuantModel</u>: Supports n-bits symmetric quantization with possible scale strategies of `mse` and `max`
+- <u>TimeStepCalibratedQuantModel</u>: Implements time-step aware quantization for activations, supports possible scale strategies of `mse` and `max`. Parametrised by number of timesteps and <i>k</i>, a constant denoting the number of intervals in the timesteps.
 
 We also implement a custom Calibrator, which calibrates the quantisation modules as per the policies:
 
-- ACT_SCALE_POLICY: How to scale the activations for quantisations. Possible values are `max` for absolute max and `mse` for Lp norm based scaling.
-- ACT_UPDATE_POLICY: How to update the step parameter of the quantiser. Possible values are `maximum`, for maximum of values through the run and `momentum` for a weighted exponential average of the scales.
+- ACT_SCALE_POLICY: How to scale the activations for quantization. Possible values are `max` for absolute max and `mse` for Lp-norm-based scaling.
+- ACT_UPDATE_POLICY: How to update the step parameter of the quantizer. Possible values are `maximum`, for maximum of values through the run, and `momentum` for a weighted exponential average of the scales.
 
-Refer to config.yaml for a more detailed description of possible parameters.
+Refer to `config.yaml` for a more detailed description of possible parameters.
 
-To load a quantised model, we can do the following:
+To load a quantized model, we can do the following:
 ```bash
 from stable_diffusion import *
 from stable_diffusion.model_loader import load_from_standard_weights
@@ -102,6 +104,49 @@ quantised_diff = TimeStepCalibratedQuantModel(diff, timesteps = 40, k = 5, weigh
 
 ## Experimental Results and Observations
 
+### Quantization
+
+Different methods for quantization were studied along with their generated images.
+
+We also present a new method for quantization called **Timestep aware quantization**.
+
+Following were the interesting takeaways:
+
+- If we just quantize the weights, we can quantize the entire network without loss of much capabilities.
+
+- Quantizing activations is harder, we skip the first and the last layer during quantizing activations as well as weights.
+
+- Scaling  based on MSE works better than scaling based on MAX value.
+
+- Our proposed approach, Time step aware quantization improves the performance significantly over vanilla quantization techniques.
+
+More details are available at the wandb page. Following are some representative images:
+
+<figure>
+    <figcaption><b>Image by Base Diffusion Model</b></figcaption>
+    <img src="assets/base.png"
+         alt="Base diffusion image">
+</figure>
+<br>
+<figure>
+    <figcaption><b>Quantizing weights and activations</b></figcaption>
+    <img src="assets/qw+act.png"
+         alt="Quantizing weights and activations">
+</figure>
+<br>
+<figure>
+    <figcaption><b>Quantizing weights and activations with mse</b></figcaption>
+    <img src="assets/qw+act+mse.png"
+         alt="MSE Quantization">
+</figure>
+<br>
+<figure>
+    <figcaption><b>Time step aware</b></figcaption>
+    <img src="assets/tqw.png"
+         alt="Time step aware">
+</figure>
+
+
 ### Pruning
 [//]: # "WandB Experiment 1 link: [Experiment 1](https://wandb.ai/hpmlcolumbia/quantization_pruning/reports/Quantization-and-Pruning--Vmlldzo3ODE1MDQ5?accessToken=5m0vlrzjcw6gyayrputy8legp1buvphuvc5esm4v6vttq9710xux9biaqx5zz5fa)"
 
@@ -117,44 +162,16 @@ WandB Experiment Report link for Pruning: [Pruning Experiments](https://wandb.ai
 
 The experiments show that pruning till 30-35% give us satisfactory results, but further pruning degrades the performance heavily.
 
-
-### Quantisation
-
-Different methods for quantisation were studied along with their generated images.
-
-We also present a new method for wuantisation called timestep aware quantisation.
-Following were the interesting takeaways:
-
-- If we just quantize the weights, we can quantise the entire network without loss of much capabilities.
-
-- Quantising activations is harder, we skip the first and the last layer during quantising activations as well as weights.
-
-- Scaling  based on MSE works better than scaling based on MAX value.
-
-- Our proposed approach, Time step aware quantisation improves the performance significantly over vanilla quantisation techniques.
-
-More details are available at the wandb page. Following are some representative images:
+The results and analysis of the pruning experiments are displayed below:
 
 <figure>
-    <img src="assets/base.png"
-         alt="Albuquerque, New Mexico">
-    <figcaption>Base diffusion image</figcaption>
+    <figcaption align = 'center'><b>Quantitative Analysis of Pruned Models</b></figcaption>
+    <img src="assets/PruningExp.png"
+         alt="Pruning Experiments Summary">
 </figure>
-
+<br>
 <figure>
-    <img src="assets/qw+act.png"
-         alt="Albuquerque, New Mexico">
-    <figcaption>Quantising weights and activations</figcaption>
-</figure>
-
-<figure>
-    <img src="assets/qw+act+mse.png"
-         alt="Albuquerque, New Mexico">
-    <figcaption>Quantising weights and activations with mse</figcaption>
-</figure>
-
-<figure>
-    <img src="assets/tqw.png"
-         alt="Albuquerque, New Mexico">
-    <figcaption>Time step aware</figcaption>
+    <figcaption align = 'center'><b>Sample Results for Pruned Models</b></figcaption>
+    <img src="assets/sampleresult.png"
+         alt="Sample Results for Pruning Experiments">
 </figure>
