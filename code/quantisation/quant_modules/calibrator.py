@@ -2,15 +2,17 @@ import gc
 import torch
 
 from .quant_wrappers import QuantWrapper, TimeStepCalibratedQuantWrapper
-from ...stable_diffusion.pipeline import generate
+import sys
+sys.path.insert(0, '../../')
+from stable_diffusion.pipeline import generate
 
 class Calibrator:
-  def __init__(self, prompts, models, tokeniser, quantised_diff,
+  def __init__(self, models, tokeniser, 
+
                act_update_policy = 'momentum',
                act_scale_policy = 'max'):
-    self.prompts = prompts
     self.models = models
-    self.quantised_diff = quantised_diff
+    self.quantised_diff = models['diffusion']
     self.quantised_diff.set_use_quant(use_weight_quant = True, use_act_quant = True)
     self.tokenizer = tokeniser
     self.device = 'cuda'
@@ -20,23 +22,22 @@ class Calibrator:
 
 
 
-  def calibrate(self, prompts):
+  def calibrate(self, prompts, config):
     for n,m in self.quantised_diff.named_modules():
       if isinstance(m, (QuantWrapper, TimeStepCalibratedQuantWrapper)):
         m.set_act_scale_method(self.act_scale_policy)
         m.set_act_update_policy(self.act_update_policy)
         m.reset_act_quantiser_inited()
 
-    uncond_prompt = ""  # Also known as negative prompt
-    do_cfg = True
-    cfg_scale = 8
-    strength = 0.9
-    num_inference_steps = 40
-    seed = 42
+    uncond_prompt = config['GENERATION_PARAMS']['UNCOND_PROMPT']  # Also known as negative prompt
+    do_cfg = config['GENERATION_PARAMS']['DO_CFG']
+    cfg_scale = config['GENERATION_PARAMS']['CFG_SCALE']
+    strength = config['GENERATION_PARAMS']['STRENGTH']
+    num_inference_steps = config['GENERATION_PARAMS']['NUM_INFERENCE_STEPS']
+    seed = config['SEED'] if 'SEED' in config else None
 
     models = self.models
-    models['diffusion'] = self.quantised_diff
-    sampler = 'ddpm'
+    sampler = config['GENERATION_PARAMS']['SAMPLER_NAME']
 
     for prompt in prompts:
       generate(

@@ -1,0 +1,36 @@
+CALIBRATION_PARAMS:
+  ACT_SCALE_POLICY: mse
+  ACT_UPDATE_POLICY: momentum
+  NUM_CALIBRATION_SAMPLES: 5
+  USE_CALIBRATION: false
+CALIBRATION_PROMPTS_PATH: /content/prompts_train.txt
+CLIP_MERGES_PATH: /content/Quantization-and-Pruning-Diffusion-Models/code/data/tokenizer_merges.txt
+CLIP_VOCAB_PATH: /content/Quantization-and-Pruning-Diffusion-Models/code/data/tokenizer_vocab.json
+GENERATION_PARAMS:
+  CFG_SCALE: 8
+  DO_CFG: true
+  NUM_INFERENCE_STEPS: 40
+  SAMPLER_NAME: ddpm
+  STRENGTH: 0.9
+  UNCOND_PROMPT: ''
+MODEL: QuantModel
+PRETRAINED_WEIGHTS_PATH: /content/Quantization-and-Pruning-Diffusion-Models/code/data/weights/v1-5-pruned-emaonly.ckpt
+QUANTISATION_PARAMS:
+  ACT_QUANT_PARAMS:
+    n_bits: 8
+  K: 5
+  QUANT_FILTERS:
+  - time_embedding
+  - unet.encoders.0
+  - unet.encoders.1
+  - unet.bottleneck
+  - unet.decoders.11
+  - final
+  TIMESTEPS: 40
+  USE_ACT_QUANT: true
+  USE_WEIGHT_QUANT: true
+  WEIGHT_QUANT_PARAMS:
+    n_bits: 8
+SEED: 42
+TEST_PROMPTS_PATH: /content/prompts_test.txt
+USE_CUDA: true
