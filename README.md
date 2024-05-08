@@ -133,7 +133,7 @@ Following were the interesting takeaways:
 
 - Our proposed approach, Time step aware quantisation improves the performance significantly over vanilla quantisation techniques.
 
-Following are some representative images:
+More details are available at the wandb page. Following are some representative images:
 
 <figure>
     <img src="assets/base.png"
