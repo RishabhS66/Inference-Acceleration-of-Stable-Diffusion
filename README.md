@@ -15,7 +15,8 @@ Thus, the primary objective of this project is to investigate the impact of acce
     README.md
     code
     ├── data
-    ├── stabe_diffusion
+    ├── stable_diffusion
+    ├── quantisation
     ├── utility.py
     ├── main.py
     ├── pruning_experiment.py
@@ -23,6 +24,8 @@ Thus, the primary objective of this project is to investigate the impact of acce
 The `data` folder contains the CLIP tokenizer vocabulary files, weights of the pre-trained Stable Diffusion model, and sample images used to calculate the FID score.
 
 The `stable_diffusion` folder contains all the necessary code to create the Stable Diffusion model from the pre-trained model's weights.
+
+The `quantisation` folder contains the modules for quantisation.
 
 The `utility.py` file has some helper functions, and the `pruning_experiment.py` file has the code for the pruning experiments. The `main.py` file runs the pruning experiments and logs the results in Weights & Biases. 
 
@@ -44,12 +47,62 @@ mkdir data/weights
 wget https://huggingface.co/runwayml/stable-diffusion-v1-5/resolve/main/v1-5-pruned-emaonly.ckpt -O ./data/weights/v1-5-pruned-emaonly.ckpt
 ```
 
-To run the experiments, simply execute the command below:
+To run the experiments, pruning experiments execute the command below:
 ```bash
 python main.py
 ```
 
+To run the quantisation experiments, execute the command below:
+```bash
+python quant_experiment_script.py config.yaml
+```
+## Quantisation Description
+The quantisation module simulates quantisation based on parameters specified by the config.yaml.
+We implement different strategies for quantisation, which can be accessed via different parameters.
+
+The ufile `uniform_symmetric_quantiser.py` has the quantiser which can quantise inputs to a symmetric range as per the specified `n_bits`.
+
+The quantisation module implements two models that serve as wrappers for base diffusion model. They are:
+
+- QuantModel: Supports n-bits symmetric quantisation with possible scale strategies of `mse` and `max`
+- TimeStepCalibratedQuantModel: Implements time-step aware quantisation for activations, supports possible scale strategies of `mse` and `max`. Parametrised by number of timesteps and k, a constant denoting the number o fintervals in the timesteps.
+
+We also implement a custom Calibrator, which calibrates the quantisation modules as per the policies:
+
+- ACT_SCALE_POLICY: How to scale the activations for quantisations. Possible values are `max` for absolute max and `mse` for Lp norm based scaling.
+- ACT_UPDATE_POLICY: How to update the step parameter of the quantiser. Possible values are `maximum`, for maximum of values through the run and `momentum` for a weighted exponential average of the scales.
+
+Refer to config.yaml for a more detailed description of possible parameters.
+
+To load a quantised model, we can do the following:
+```bash
+from stable_diffusion import *
+from stable_diffusion.model_loader import load_from_standard_weights
+from transformers import CLIPTokenizer
+
+tokenizer = CLIPTokenizer("<path_to_vocab_file>",
+                          merges_file="<path_to_merges_file>")
+clip = CLIP()
+encoder = VAE_Encoder()
+decoder = VAE_Decoder()
+diff = Diffusion()
+
+state_dict = load_from_standard_weights('<path_to_weights>')
+clip.load_state_dict(state_dict['clip'], strict = True)
+encoder.load_state_dict(state_dict['encoder'], strict = True)
+decoder.load_state_dict(state_dict['decoder'], strict = True)
+diff.load_state_dict(state_dict['diffusion'], strict = True)
+
+quantised_diff = QuantModel(diff, weight_quant_params={'n_bits': 8}, act_quant_params={'n_bits': 8})
+
+OR
+
+quantised_diff = TimeStepCalibratedQuantModel(diff, timesteps = 40, k = 5, weight_quant_params={'n_bits': 8}, act_quant_params={'n_bits': 8}, quant_filters = filters)
+```
+
 ## Experimental Results and Observations
+
+### Pruning
 [//]: # "WandB Experiment 1 link: [Experiment 1](https://wandb.ai/hpmlcolumbia/quantization_pruning/reports/Quantization-and-Pruning--Vmlldzo3ODE1MDQ5?accessToken=5m0vlrzjcw6gyayrputy8legp1buvphuvc5esm4v6vttq9710xux9biaqx5zz5fa)"
 
 [//]: # "WandB Experiment 1 link: [Experiment 1](https://wandb.ai/hpmlcolumbia/quantization_pruning/reports/Pruning-Experiments--Vmlldzo3ODIzMTU4?accessToken=taan0iakgdmmv6rx0herulahv1o17ik83lhz6ewdzvkgiz0y8iwdnokpcwr9br5e)"
@@ -63,3 +116,45 @@ L1-unstructured pruning was carried out on all the linear and convolutional laye
 WandB Experiment Report link for Pruning: [Pruning Experiments](https://wandb.ai/hpmlcolumbia/quantization_pruning/reports/Quantitative-Analysis-of-Pruned-Models--Vmlldzo3ODQxMjAx?accessToken=zotsiub1f124mwqrsu346hgyqpti1iiz8fnejg8kp3xuvq9pbeq0uvwe8v984zm5)
 
 The experiments show that pruning till 30-35% give us satisfactory results, but further pruning degrades the performance heavily.
+
+
+### Quantisation
+
+Different methods for quantisation were studied along with their generated images.
+
+We also present a new method for wuantisation called timestep aware quantisation.
+Following were the interesting takeaways:
+
+- If we just quantize the weights, we can quantise the entire network without loss of much capabilities.
+
+- Quantising activations is harder, we skip the first and the last layer during quantising activations as well as weights.
+
+- Scaling  based on MSE works better than scaling based on MAX value.
+
+- Our proposed approach, Time step aware quantisation improves the performance significantly over vanilla quantisation techniques.
+
+Following are some representative images:
+
+<figure>
+    <img src="assets/base.png"
+         alt="Albuquerque, New Mexico">
+    <figcaption>Base diffusion image</figcaption>
+</figure>
+
+<figure>
+    <img src="assets/qw+act.png"
+         alt="Albuquerque, New Mexico">
+    <figcaption>Quantising weights and activations</figcaption>
+</figure>
+
+<figure>
+    <img src="assets/qw+act+mse.png"
+         alt="Albuquerque, New Mexico">
+    <figcaption>Quantising weights and activations with mse</figcaption>
+</figure>
+
+<figure>
+    <img src="assets/tqw.png"
+         alt="Albuquerque, New Mexico">
+    <figcaption>Time step aware</figcaption>
+</figure>
