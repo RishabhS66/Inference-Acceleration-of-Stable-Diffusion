@@ -181,21 +181,40 @@ if __name__ == '__main__':
   config_path = sys.argv[1]
   config = yaml.load(open(config_path), Loader=yaml.FullLoader)
 
-  wandb.login()
+  if config["LOG_TO_WANDB"]:
+    n_bits = config["QUANTISATION_PARAMS"]["WEIGHT_QUANT_PARAMS"]["n_bits"]
+    name = f'{n_bits}_TIME_CAL_' if config['MODEL'] == 'TimeStepCalibratedQuantModel' else f'{n_bits}_SIMPLE_'
+    if config["QUANTISATION_PARAMS"]["USE_ACT_QUANT"]:
+      name = name + 'a'
 
-  wandb.init(
-        project="stable-diff-quantisation",
-        entity="pranjal_sri",
-        config = {
-            "model": config["MODEL"],
-            "seed": config['SEED'],
-            "quant_params": config["QUANTISATION_PARAMS"],
-            "generation_params": config["GENERATION_PARAMS"],
-            "calibration_params": config["CALIBRATION_PARAMS"],
-            "test_params": config["TEST_PARAMS"]
-        }
-    )
+    if config["QUANTISATION_PARAMS"]["USE_WEIGHT_QUANT"]:
+      name = name+'q'
+
+    if config["CALIBRATION_PARAMS"]["USE_CALIBRATION"]:
+      name = name + "_" + config["CALIBRATION_PARAMS"]["ACT_SCALE_POLICY"] + "_" + config["CALIBRATION_PARAMS"]["ACT_UPDATE_POLICY"]
+    
+    if len(config["QUANTISATION_PARAMS"]["QUANT_FILTERS"]) > 0:
+      name += "_filt"
+    
+    if config["CALIBRATION_PARAMS"]["NUM_CALIBRATION_SAMPLES"] > 15:
+      name+= f'({config["CALIBRATION_PARAMS"]["NUM_CALIBRATION_SAMPLES"]} steps)'
+    wandb.login()
+
+    wandb.init(
+          project="stable-diff-quantisation",
+          entity="pranjal_sri",
+          config = {
+              "model": config["MODEL"],
+              "seed": config['SEED'],
+              "quant_params": config["QUANTISATION_PARAMS"],
+              "generation_params": config["GENERATION_PARAMS"],
+              "calibration_params": config["CALIBRATION_PARAMS"],
+              "test_params": config["TEST_PARAMS"]
+          },
+          name = name
+      )
   
   
   run(config)
-  wandb.finish()
+  if config["LOG_TO_WANDB"]:
+    wandb.finish()

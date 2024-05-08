@@ -59,8 +59,7 @@ class Calibrator:
       if "LOG_TO_WANDB" in config and config["LOG_TO_WANDB"]:
         print("-- logging to wandb --")
         wandb.log({
-          'calibration_prompt': prompt,
-          'calibrated_image': wandb.Image(img)
+          'calibrated_image': wandb.Image(img, caption = prompt)
         })
 
       gc.collect()
