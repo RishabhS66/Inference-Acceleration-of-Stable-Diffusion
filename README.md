@@ -20,6 +20,8 @@ Thus, the primary objective of this project is to investigate the impact of acce
     ├── utility.py
     ├── main.py
     ├── pruning_experiment.py
+    ├── quant_experiment_script.py
+    ├── prune_quantize_model.py
 
 The `data` folder contains the CLIP tokenizer vocabulary files, weights of the pre-trained Stable Diffusion model, and sample images used to calculate the FID score.
 
@@ -39,6 +41,7 @@ The `utility.py` file has some helper functions, and the `pruning_experiment.py`
 - Transformers
 - Wandb
 - Torchmetrics
+- Dotenv
 
 ## Installation and Running the Experiments
 To download the pre-trained model's weights, run the following command:
@@ -55,6 +58,12 @@ python quant_experiment_script.py config.yaml
 To run the pruning experiments, execute the command below:
 ```bash
 python main.py
+```
+By default, the pruning experiments prune the model unstructurally. You can provide the argument to `run_pruning_exp()` as `True` in `main.py` file to run the experiments for pruning the model structurally 
+
+To run the combination of pruning and quantization experiments, execute the command below:
+```bash
+python prune_quantize_model.py config.yaml
 ```
 
 
@@ -120,7 +129,7 @@ Following were the interesting takeaways:
 
 - Our proposed approach, Time step aware quantization improves the performance significantly over vanilla quantization techniques.
 
-More details are available at the wandb page ([here](https://wandb.ai/hpmlcolumbia/quantization_pruning/reports/Quantization-of-Stable-Diffusion-Model--Vmlldzo3ODYwNjE0?accessToken=l1s8rybi2te5hevvzi5knmhpuqm1hszibg7ouamr7v3qyx0ysyaufsrnwvblbvkk)). Following are some representative images:
+More experiment details are available at the wandb page ([here](https://wandb.ai/pranjal_sri/stable-diff-quantisation?nw=nwuserpranjal_sri)). Following are some representative images:
 
 <figure>
     <figcaption><b>Image by Base Diffusion Model</b></figcaption>
@@ -158,7 +167,7 @@ More details are available at the wandb page ([here](https://wandb.ai/hpmlcolumb
 
 L1-unstructured pruning was carried out on all the linear and convolutional layers of the UNet architecture of the Diffusion model. The results can be seen in the report below:
 
-WandB Experiment Report link for Pruning: [Pruning Experiments](https://wandb.ai/hpmlcolumbia/quantization_pruning/reports/Quantitative-Analysis-of-Pruned-Models--Vmlldzo3ODQxMjAx?accessToken=zotsiub1f124mwqrsu346hgyqpti1iiz8fnejg8kp3xuvq9pbeq0uvwe8v984zm5)
+WandB Experiment Report link for L1-unstructured Pruning: [L1-unstructured Pruning Experiments](https://wandb.ai/hpmlcolumbia/quantization_pruning/reports/Quantitative-Analysis-of-Pruned-Models--Vmlldzo3ODQxMjAx?accessToken=zotsiub1f124mwqrsu346hgyqpti1iiz8fnejg8kp3xuvq9pbeq0uvwe8v984zm5)
 
 The experiments show that pruning till 30-35% give us satisfactory results, but further pruning degrades the performance heavily.
 
@@ -174,4 +183,31 @@ The results and analysis of the pruning experiments are displayed below:
     <figcaption align = 'center'><b>Sample Results for Pruned Models</b></figcaption>
     <img src="assets/sampleresult.png"
          alt="Sample Results for Pruning Experiments">
+</figure>
+
+We also experimented with structural pruning of weights of UNet, where we pruned channels based on L2 norm. However, we observed a heavy degradation in performance after 5% pruning only. This can be seen from the figures below.
+
+WandB Experiment Report link for Structured Pruning: [Structured Pruning Experiments](https://wandb.ai/hpmlcolumbia/quantization_pruning/reports/Quantitative-Analysis-of-Structurally-Pruned-Models--Vmlldzo3ODY3ODcy?accessToken=d73ww1hoexbvsoxa90qei1k11tl9pyicxqxi01l8sdmst3ssza54h9w98mhc5aao)
+<figure>
+    <figcaption align = 'center'><b>Quantitative Analysis of Structurally Pruned Models</b></figcaption>
+    <img src="assets/StructuralPruningExp.png"
+         alt="Structural Pruning Experiments Summary">
+</figure>
+<br>
+<figure>
+    <figcaption align = 'center'><b>Sample Results for Structurally Pruned Models</b></figcaption>
+    <img src="assets/sampleresultstructural.png"
+         alt="Sample Results for Structural Pruning Experiments">
+</figure>
+
+### Pruning + Quantization
+
+We got good results when we pruned our model unstructurally (L1-norm) by 20% and used Timestep Aware Calibrated Model with MSE for scaling the activations.
+
+The WandB Experiment results are [here](https://api.wandb.ai/links/hpmlcolumbia/ta2q28tz).
+
+<figure>
+    <figcaption align = 'center'><b>Results for Pruning and then Quantizing</b></figcaption>
+    <img src="assets/combined.png"
+         alt="Results for Pruning and then Quantizing">
 </figure>

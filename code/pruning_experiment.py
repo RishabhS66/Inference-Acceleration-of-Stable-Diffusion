@@ -12,7 +12,7 @@ from stable_diffusion import *
 from utility import percentage_pruned, get_real_images
 
 
-def run_pruning_exp():
+def run_pruning_exp(structured_pruning=False):
     clip = CLIP()
     encoder = VAE_Encoder()
     decoder = VAE_Decoder()
@@ -76,9 +76,12 @@ def run_pruning_exp():
             for module_name, module in diff.named_modules():
                 if 'unet' in module_name and (isinstance(module, nn.Conv2d) or isinstance(module, nn.Linear)):
                     # If the module is a convolutional or linear layer, prune it
-                    prune.l1_unstructured(module, name='weight', amount=p)
+                    if structured_pruning:
+                        prune.ln_structured(module, name='weight', amount=p, n=2, dim=0)
+                    else:
+                        prune.l1_unstructured(module, name='weight', amount=p)
                     prune.remove(module, 'weight')
-                    if module.bias is not None:
+                    if module.bias is not None and not structured_pruning:
                         prune.l1_unstructured(module, name='bias', amount=p)
                         prune.remove(module, 'bias')
             print('Model Pruned!')
@@ -154,8 +157,12 @@ def run_pruning_exp():
 
         table2.add_data(experiment_type, params, pp, clip_score_net, round(float(fid.compute()), 4))
 
-    wandb.log({"Results for Pruning Convolutional and Linear Layers of UNet": table})
-    wandb.log({"CLIP Score and FID for Pruning Convolutional and Linear Layers of UNet": table2})
+    if structured_pruning:
+        wandb.log({"Results for Structurally Pruning Convolutional and Linear Layers of UNet": table})
+        wandb.log({"CLIP Score and FID for Structurally Pruning Convolutional and Linear Layers of UNet": table2})
+    else:
+        wandb.log({"Results for Pruning Convolutional and Linear Layers of UNet": table})
+        wandb.log({"CLIP Score and FID for Pruning Convolutional and Linear Layers of UNet": table2})
 
     return
 
