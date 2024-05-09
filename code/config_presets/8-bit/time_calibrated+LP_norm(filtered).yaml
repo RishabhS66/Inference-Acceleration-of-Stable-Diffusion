@@ -1,5 +1,5 @@
-EXP_NAME: Weights+Acts+LP_norm (Filtered)
-MODEL: QuantModel 
+EXP_NAME: Timestep-calibrated+LP_norm (Filtered)
+MODEL: TimeStepCalibratedQuantModel 
 # Possible Values: QuantModel, TimeStepCalibratedQuantModel
 SEED: 42
 USE_CUDA: true

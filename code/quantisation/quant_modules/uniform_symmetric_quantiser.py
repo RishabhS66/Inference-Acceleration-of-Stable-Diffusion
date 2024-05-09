@@ -18,7 +18,7 @@ def lp_loss(pred, tgt, p=2.0, reduction='none'):
         return (pred-tgt).abs().pow(p).mean()
 
 class UniformSymmetricQuantiser(nn.Module):
-  def __init__(self, n_bits, channel_wise=True, scale_method='max', activation_mom = 0.95):
+  def __init__(self, n_bits, channel_wise=True, scale_method='max', activation_mom = 0.90):
     super(UniformSymmetricQuantiser, self).__init__()
     assert 2 <= n_bits <= 8, 'bitwidth not supported'
     self.n_bits = n_bits

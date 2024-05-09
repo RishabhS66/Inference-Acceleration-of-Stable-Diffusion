@@ -3,114 +3,34 @@ from stable_diffusion.model_loader import load_from_standard_weights
 from transformers import CLIPTokenizer
 from quantisation.quant_modules import TimeStepCalibratedQuantModel, QuantModel, Calibrator
 from quantisation.quant_modules.utils import init_quantised_diff
-import torch
-from torchmetrics.functional.multimodal import clip_score
-from torchmetrics.image.fid import FrechetInceptionDistance
-from functools import partial
-import torchvision.transforms.functional as F
-import numpy as np
+from quantisation.evaluate_quantised_models import evaluate
+
+
 import yaml
 import sys
 import wandb
 import os
 from dotenv import load_dotenv
 
-clip_score_fn = partial(clip_score, model_name_or_path="openai/clip-vit-base-patch16")
+def construct_exp_name(config):
+  n_bits = config["QUANTISATION_PARAMS"]["WEIGHT_QUANT_PARAMS"]["n_bits"]
+  name = f'{n_bits}_T_' if config['MODEL'] == 'TimeStepCalibratedQuantModel' else f'{n_bits}_S_'
+  if config["QUANTISATION_PARAMS"]["USE_ACT_QUANT"]:
+    name = name + 'a'
 
+  if config["QUANTISATION_PARAMS"]["USE_WEIGHT_QUANT"]:
+    name = name+'w'
 
-def calculate_clip_score(images, prompts):
-    clip_score = clip_score_fn(torch.from_numpy(images).permute(0, 3, 1, 2), prompts).detach()
-    return round(float(clip_score), 4)
-
-
-def calculate_fid_score(fake_images, real_images):
-  fake_images = torch.from_numpy(fake_images).permute(0, 3, 1, 2)/255.0
-  real_images = torch.from_numpy(real_images).permute(0, 3, 1, 2)/255.0
-  fake_images = F.center_crop(fake_images, (256, 256))
-  real_images = F.center_crop(real_images, (256, 256))
-
-  fid = FrechetInceptionDistance(normalize=True)
-  fid.update(real_images, real=True)
-  fid.update(fake_images, real=False)
-  return round(float(fid.compute()), 4)
-
-
-def test_clip_fid_score(models, tokenizer, config):
-  with open(config["TEST_PROMPTS_PATH"]) as f:
-    prompts = f.readlines()
-    prompts = [line.rstrip() for line in prompts]
-  prompts = prompts[:config["TEST_PARAMS"]["NUM_TEST_SAMPLES"]]
-  device = torch.device("cuda" if torch.cuda.is_available() and config['USE_CUDA'] else "cpu")
-  quantized_images = []
-  
-  uncond_prompt = config['GENERATION_PARAMS']['UNCOND_PROMPT']  # Also known as negative prompt
-  do_cfg = config['GENERATION_PARAMS']['DO_CFG']
-  cfg_scale = config['GENERATION_PARAMS']['CFG_SCALE']
-  strength = config['GENERATION_PARAMS']['STRENGTH']
-  num_inference_steps = config['GENERATION_PARAMS']['NUM_INFERENCE_STEPS']
-  seed = config['SEED'] if 'SEED' in config else None
-  sampler = config['GENERATION_PARAMS']['SAMPLER_NAME']
-  quantized_images = []
-  
-
-  models['diffusion'].set_use_quant(use_act_quant = config['QUANTISATION_PARAMS']['USE_ACT_QUANT'], use_weight_quant = config['QUANTISATION_PARAMS']['USE_WEIGHT_QUANT'])
-  for prompt in prompts:
-    quantized_image = generate(
-                prompt=prompt,
-                uncond_prompt=uncond_prompt,
-                input_image=None,
-                strength=strength,
-                do_cfg=do_cfg,
-                cfg_scale=cfg_scale,
-                sampler_name=sampler,
-                n_inference_steps=num_inference_steps,
-                seed=seed,
-                models=models,
-                device=device,
-                idle_device="cpu",
-                tokenizer=tokenizer,
-            )
-    quantized_images.append(quantized_image)
-  
-  models['diffusion'].set_use_quant(use_act_quant = False, use_weight_quant = False)
-  real_images = []
-  for prompt in prompts:
-    real_image = generate(
-                prompt=prompt,
-                uncond_prompt=uncond_prompt,
-                input_image=None,
-                strength=strength,
-                do_cfg=do_cfg,
-                cfg_scale=cfg_scale,
-                sampler_name=sampler,
-                n_inference_steps=num_inference_steps,
-                seed=seed,
-                models=models,
-                device=device,
-                idle_device="cpu",
-                tokenizer=tokenizer,
-            )
-    real_images.append(real_image)
-
-  
-  clip_score = calculate_clip_score(np.array(quantized_images), prompts)
-  fid_score = calculate_fid_score(np.array(quantized_images), np.array(real_images))
-
-  if config["LOG_TO_WANDB"]:
-    table = wandb.Table(columns = ["Prompt", "Quantised Image", "Unquantised Image"])
-
-    for prompt, q_img, unq_img in zip(prompts, quantized_images, real_images):
-      table.add_data(prompt, 
-                    wandb.Image(q_img),
-                    wandb.Image(unq_img))
+  if config["CALIBRATION_PARAMS"]["USE_CALIBRATION"]:
+    name = name + "_" + config["CALIBRATION_PARAMS"]["ACT_SCALE_POLICY"] + "_" + config["CALIBRATION_PARAMS"]["ACT_UPDATE_POLICY"]
     
-    wandb.log({'test_table': table})
-    wandb.log({
-        'CLIP Score': clip_score,
-        'FID Score': fid_score
-      })
+  if len(config["QUANTISATION_PARAMS"]["QUANT_FILTERS"]) > 0:
+    name += "_filt"
+    
+  if config["CALIBRATION_PARAMS"]["NUM_CALIBRATION_SAMPLES"] > 15:
+    name+= f'({config["CALIBRATION_PARAMS"]["NUM_CALIBRATION_SAMPLES"]} steps)'
   
-  return clip_score, fid_score
+  return name
 
 def calibrate(config, models, tokenizer):
   with open(config['CALIBRATION_PROMPTS_PATH'], 'r') as f:
@@ -172,7 +92,8 @@ def run(config):
     init_quantised_diff(quantised_diffuser)
     calibrate(config, models, tokenizer)
   print("Evaluating Quantised model...")
-  clip_score, fid_score = test_clip_fid_score(models, tokenizer, config)
+  diff_mses, clip_score, fid_score = evaluate(models, tokenizer, config)
+  print(f'Diffusion output MSEs: {diff_mses}')
   print(f'Clip Score: {clip_score}, FID Score: {fid_score}')
 
 if __name__ == '__main__':
@@ -182,22 +103,12 @@ if __name__ == '__main__':
   config = yaml.load(open(config_path), Loader=yaml.FullLoader)
 
   if config["LOG_TO_WANDB"]:
-    n_bits = config["QUANTISATION_PARAMS"]["WEIGHT_QUANT_PARAMS"]["n_bits"]
-    name = f'{n_bits}_TIME_CAL_' if config['MODEL'] == 'TimeStepCalibratedQuantModel' else f'{n_bits}_SIMPLE_'
-    if config["QUANTISATION_PARAMS"]["USE_ACT_QUANT"]:
-      name = name + 'a'
-
-    if config["QUANTISATION_PARAMS"]["USE_WEIGHT_QUANT"]:
-      name = name+'q'
-
-    if config["CALIBRATION_PARAMS"]["USE_CALIBRATION"]:
-      name = name + "_" + config["CALIBRATION_PARAMS"]["ACT_SCALE_POLICY"] + "_" + config["CALIBRATION_PARAMS"]["ACT_UPDATE_POLICY"]
+    if "EXP_NAME" in config:
+      exp_name = config["EXP_NAME"]
+    else: 
+      exp_name = construct_exp_name(config)
+      config["EXP_NAME"] = exp_name
     
-    if len(config["QUANTISATION_PARAMS"]["QUANT_FILTERS"]) > 0:
-      name += "_filt"
-    
-    if config["CALIBRATION_PARAMS"]["NUM_CALIBRATION_SAMPLES"] > 15:
-      name+= f'({config["CALIBRATION_PARAMS"]["NUM_CALIBRATION_SAMPLES"]} steps)'
     wandb.login()
 
     wandb.init(
@@ -211,7 +122,7 @@ if __name__ == '__main__':
               "calibration_params": config["CALIBRATION_PARAMS"],
               "test_params": config["TEST_PARAMS"]
           },
-          name = name
+          name = exp_name
       )
   
   

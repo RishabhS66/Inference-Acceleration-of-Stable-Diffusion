@@ -36,6 +36,7 @@ def generate(
     device=None,
     idle_device=None,
     tokenizer=None,
+    diff_output_tracer = None
 ):
     WIDTH = 512
     HEIGHT = 512
@@ -158,10 +159,13 @@ def generate(
             # (Batch_Size, 4, Latents_Height, Latents_Width) -> (Batch_Size, 4, Latents_Height, Latents_Width)
             model_output = diffusion(model_input, context, time_embedding)
 
+
             if do_cfg:
                 output_cond, output_uncond = model_output.chunk(2)
                 model_output = cfg_scale * (output_cond - output_uncond) + output_uncond
-
+            
+            if diff_output_tracer is not None:
+              diff_output_tracer.append(model_output)
             # (Batch_Size, 4, Latents_Height, Latents_Width) -> (Batch_Size, 4, Latents_Height, Latents_Width)
             latents = sampler.step(timestep, latents, model_output)
 

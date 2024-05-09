@@ -1,4 +1,4 @@
-EXP_NAME: Weights+Acts+LP_norm (Filtered)
+EXP_NAME: Weights+Acts (Filtered)
 MODEL: QuantModel 
 # Possible Values: QuantModel, TimeStepCalibratedQuantModel
 SEED: 42
@@ -30,7 +30,7 @@ QUANTISATION_PARAMS:
   USE_WEIGHT_QUANT: true
 
 CALIBRATION_PARAMS:
-  ACT_SCALE_POLICY: mse
+  ACT_SCALE_POLICY: max
   ACT_UPDATE_POLICY: momentum
   NUM_CALIBRATION_SAMPLES: 10
   USE_CALIBRATION: true
