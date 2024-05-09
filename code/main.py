@@ -22,5 +22,6 @@ if __name__ == '__main__':
     )
 
     run_pruning_exp()
+    # run_pruning_exp(structured_pruning=True)
 
     wandb.finish()

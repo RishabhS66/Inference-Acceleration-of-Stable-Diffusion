@@ -6,9 +6,9 @@ LOG_TO_WANDB: true
 
 CALIBRATION_PROMPTS_PATH: ./prompts_train.txt
 TEST_PROMPTS_PATH: ./prompts_test.txt
-PRETRAINED_WEIGHTS_PATH: /content/Quantization-and-Pruning-Diffusion-Models/code/data/weights/v1-5-pruned-emaonly.ckpt
-CLIP_MERGES_PATH: /content/Quantization-and-Pruning-Diffusion-Models/code/data/tokenizer_merges.txt
-CLIP_VOCAB_PATH: /content/Quantization-and-Pruning-Diffusion-Models/code/data/tokenizer_vocab.json
+PRETRAINED_WEIGHTS_PATH: ./data/weights/v1-5-pruned-emaonly.ckpt
+CLIP_MERGES_PATH: ./data/tokenizer_merges.txt
+CLIP_VOCAB_PATH: ./data/tokenizer_vocab.json
 
 QUANTISATION_PARAMS:
   WEIGHT_QUANT_PARAMS:
