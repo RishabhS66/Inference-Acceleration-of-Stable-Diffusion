@@ -200,8 +200,6 @@ Different methods for quantization were studied along with their generated image
 We present a new method for quantization called **Timestep aware quantization**.
 
 Following is the trace of the MSE loss between outputs of different quantisation methods and unquantised models:
-
-Following were the interesting takeaways:
 <figure>
     <figcaption><b>MSE losses in output (Quantized vs Unquantised)</b></figcaption>
     <img src="assets/mse_lineplot.png"
