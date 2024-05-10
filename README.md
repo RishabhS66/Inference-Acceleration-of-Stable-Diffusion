@@ -22,6 +22,7 @@ Thus, the primary objective of this project is to investigate the impact of acce
     ├── pruning_experiment.py
     ├── quant_experiment_script.py
     ├── prune_quantize_model.py
+    ├── pruning_profile_exp.py
 
 The `data` folder contains the CLIP tokenizer vocabulary files, weights of the pre-trained Stable Diffusion model, and sample images used to calculate the FID score.
 
@@ -59,7 +60,8 @@ To run the pruning experiments, execute the command below:
 ```bash
 python main.py
 ```
-By default, the pruning experiments prune the model unstructurally. You can provide the argument to `run_pruning_exp()` as `True` in `main.py` file to run the experiments for pruning the model structurally 
+By default, the pruning experiments prune the model unstructurally. You can provide the argument to `run_pruning_exp()` as `True` in `main.py` file to run the experiments for pruning the model structurally.
+You can also run profiling experiments for pruning via the `main.py` script.
 
 To run the combination of pruning and quantization experiments, execute the command below:
 ```bash
@@ -198,6 +200,14 @@ WandB Experiment Report link for Structured Pruning: [Structured Pruning Experim
     <figcaption align = 'center'><b>Sample Results for Structurally Pruned Models</b></figcaption>
     <img src="assets/sampleresultstructural.png"
          alt="Sample Results for Structural Pruning Experiments">
+</figure>
+
+We also carried out profiling of the different components of diffusion model, and the impact of pruning. As observed from the [WandB report for the experiments](https://wandb.ai/hpmlcolumbia/quantization_pruning/reports/Profiling-of-Unstructured-Pruned-UNet--Vmlldzo3ODgyODA4?accessToken=pj5m09g0rfioulo4pfgbe64usaiy22477um3cddl2g69kffbv4ynexnl2abieidm), it is clear that the time for UNet to complete the timesteps reduces as the model is pruned more.
+Note that the times are averaged for each experiment type.
+<figure>
+    <figcaption align = 'center'><b>Profiling Results for Unstructured Pruned Models</b></figcaption>
+    <img src="assets/profiling.png"
+         alt="Profiling Results">
 </figure>
 
 ### Pruning + Quantization
