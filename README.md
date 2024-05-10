@@ -212,7 +212,7 @@ We also evaluated the FID scores and CLIP scores for different models. Following
 <img src="assets/FID_scores.png" width="425"/> <img src="assets/CLIP_scores.png" width="425"/> 
 
 Interesting takeaways:
-- Our proposed approach, Time step calibrated quantization outperforms other methods in scores as well as image generation quality.
+- Our proposed approach, Time step calibrated quantization outperforms other methods in scores as well as image generation quality. It achieved the lowest FID score and highest CLIP score as well.
 
 - If we just quantize the weights, we can quantize the entire network without loss of much capabilities.
 
