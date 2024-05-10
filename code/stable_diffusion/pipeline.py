@@ -2,6 +2,7 @@ import torch
 import numpy as np
 from .ddmsampler import DDPMSampler
 from tqdm import tqdm
+import time
 
 def rescale(x, old_range, new_range, clamp=False):
     old_min, old_max = old_range
@@ -36,12 +37,14 @@ def generate(
     device=None,
     idle_device=None,
     tokenizer=None,
-    diff_output_tracer = None
+    diff_output_tracer = None,
+    profiling=False
 ):
     WIDTH = 512
     HEIGHT = 512
     LATENTS_WIDTH = WIDTH // 8
     LATENTS_HEIGHT = HEIGHT // 8
+
 
 
     with torch.no_grad():
@@ -59,6 +62,8 @@ def generate(
             generator.seed()
         else:
             generator.manual_seed(seed)
+
+        clip_time = 0
 
         clip = models["clip"]
         clip.to(device)
@@ -81,7 +86,13 @@ def generate(
             # (Batch_Size, Seq_Len)
             uncond_tokens = torch.tensor(uncond_tokens, dtype=torch.long, device=device)
             # (Batch_Size, Seq_Len) -> (Batch_Size, Seq_Len, Dim)
+            torch.cuda.synchronize()
+            start_clip_time = time.perf_counter()
             uncond_context = clip(uncond_tokens)
+            torch.cuda.synchronize()
+            end_clip_time = time.perf_counter()
+
+            clip_time = end_clip_time - start_clip_time
             # (Batch_Size, Seq_Len, Dim) + (Batch_Size, Seq_Len, Dim) -> (2 * Batch_Size, Seq_Len, Dim)
             context = torch.cat([cond_context, uncond_context])
         else:
@@ -141,6 +152,9 @@ def generate(
         diffusion.to(device)
 
         timesteps = tqdm(sampler.timesteps)
+        torch.cuda.synchronize()
+        start_diffusion_time = time.perf_counter()
+
         for i, timestep in enumerate(timesteps):
             if hasattr(diffusion, 'set_current_timestep'):
                 diffusion.set_current_timestep(i)
@@ -169,13 +183,24 @@ def generate(
             # (Batch_Size, 4, Latents_Height, Latents_Width) -> (Batch_Size, 4, Latents_Height, Latents_Width)
             latents = sampler.step(timestep, latents, model_output)
 
+        torch.cuda.synchronize()
+        end_diffusion_time = time.perf_counter()
+
+        diffusion_time = end_diffusion_time - start_diffusion_time
+
         to_idle(diffusion)
         torch.cuda.empty_cache()
 
         decoder = models["decoder"]
         decoder.to(device)
         # (Batch_Size, 4, Latents_Height, Latents_Width) -> (Batch_Size, 3, Height, Width)
+        torch.cuda.synchronize()
+        start_decoder_time = time.perf_counter()
         images = decoder(latents)
+        torch.cuda.synchronize()
+        end_decoder_time = time.perf_counter()
+
+        decoder_time = end_decoder_time - start_decoder_time
         to_idle(decoder)
         torch.cuda.empty_cache()
 
@@ -183,4 +208,7 @@ def generate(
         # (Batch_Size, Channel, Height, Width) -> (Batch_Size, Height, Width, Channel)
         images = images.permute(0, 2, 3, 1)
         images = images.to("cpu", torch.uint8).numpy()
+        if profiling:
+            return images[0], clip_time, diffusion_time, decoder_time
         return images[0]
+

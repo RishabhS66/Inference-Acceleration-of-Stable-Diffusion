@@ -1,5 +1,6 @@
 import os
 from pruning_experiment import *
+from pruning_profile_exp import *
 
 # !mkdir data
 # !mkdir data/weights
@@ -23,5 +24,6 @@ if __name__ == '__main__':
 
     run_pruning_exp()
     # run_pruning_exp(structured_pruning=True)
+    # run run_pruning_profile_exp()
 
     wandb.finish()
