@@ -1,4 +1,4 @@
-# Quantizing and Pruning Diffusion Models
+# Faster Inference for Stable Diffusion using Quantization and Pruning
 
 ```
 Team Members: Pranjal Srivastava (ps3392), Rishabh Srivastava (rs4489)
